@@ -264,11 +264,20 @@ async function signTransaction(
 ): Promise<void> {
   const publicKey = signer.getPublicKey();
   for (let index = 0; index < selected.length; index += 1) {
-    const digest = signingHash(transaction, index, {
-      value: selected[index].value,
-      scriptPubKey: selected[index].scriptPubKey,
-      token: selected[index].token,
-    });
+    const digest = signingHash(
+      transaction,
+      index,
+      {
+        value: selected[index].value,
+        scriptPubKey: selected[index].scriptPubKey,
+        token: selected[index].token,
+      },
+      selected.map((utxo) => ({
+        value: utxo.value,
+        scriptPubKey: utxo.scriptPubKey,
+        token: utxo.token,
+      })),
+    );
     const signature = Uint8Array.from([...(await signer.signDigest(digest)), 0x41]);
     transaction.inputs[index].scriptSig = Uint8Array.from([
       ...pushData(signature),

@@ -2,12 +2,28 @@ import {
   decodeCashAddress as decodeLibauthCashAddress,
   cashAddressToLockingBytecode,
   decodeTransactionBCH,
+  decodeAuthenticationInstructions,
+  authenticationInstructionsAreMalformed,
+  authenticationInstructionsArePushInstructions,
+  decodeBitcoinSignature,
+  encodeDataPush,
   encodeCashAddress as encodeLibauthCashAddress,
+  encodeLockingBytecodeP2pkh,
+  encodeLockingBytecodeP2sh20,
+  encodeLockingBytecodeP2sh32,
   encodeTransactionBCH,
   generateSigningSerializationBCH,
   hash160 as libauthHash160,
   hash256 as libauthHash256,
+  binToBase64,
+  base64ToBin,
+  binToHex,
+  hexToBin,
+  isPayToPublicKeyHash,
+  isPayToScriptHash20,
+  isPayToScriptHash32,
   secp256k1,
+  verifyTransactionTokens,
 } from '@bitauth/libauth';
 import type { BchNetwork, BchOutPoint, BchSourceOutput, BchTokenCapability } from './types';
 
@@ -145,35 +161,23 @@ export function createBchPaymentTarget(
 }
 
 export function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return binToHex(bytes);
 }
 
 export function hexToBytes(value: string): Uint8Array {
-  if (!/^[0-9a-fA-F]*$/.test(value) || value.length % 2 !== 0) {
-    throw new Error('invalid hexadecimal value');
-  }
-  const result = new Uint8Array(value.length / 2);
-  for (let index = 0; index < result.length; index += 1) {
-    result[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
-  }
+  const result = hexToBin(value);
+  if (typeof result === 'string') throw new Error(result);
   return result;
 }
 
 export function bytesToBase64(bytes: Uint8Array): string {
-  if (typeof btoa === 'function') {
-    let binary = '';
-    for (const byte of bytes) binary += String.fromCharCode(byte);
-    return btoa(binary);
-  }
-  return Buffer.from(bytes).toString('base64');
+  return binToBase64(bytes);
 }
 
 export function base64ToBytes(value: string): Uint8Array {
-  if (typeof atob === 'function') {
-    const binary = atob(value);
-    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  }
-  return new Uint8Array(Buffer.from(value, 'base64'));
+  const result = base64ToBin(value);
+  if (typeof result === 'string') throw new Error(result);
+  return result;
 }
 
 export function hash160(value: Uint8Array): Uint8Array {
@@ -186,36 +190,29 @@ export function doubleSha256(value: Uint8Array): Uint8Array {
 
 export function p2pkhScript(hash: Uint8Array): Uint8Array {
   if (hash.length !== 20) throw new Error('P2PKH hash must be 20 bytes');
-  return Uint8Array.from([0x76, 0xa9, 0x14, ...hash, 0x88, 0xac]);
+  return encodeLockingBytecodeP2pkh(hash);
 }
 
 export function p2sh20Script(hash: Uint8Array): Uint8Array {
   if (hash.length !== 20) throw new Error('P2SH20 hash must be 20 bytes');
-  return Uint8Array.from([0xa9, 0x14, ...hash, 0x87]);
+  return encodeLockingBytecodeP2sh20(hash);
 }
 
 export function p2sh32Script(hash: Uint8Array): Uint8Array {
   if (hash.length !== 32) throw new Error('P2SH32 hash must be 32 bytes');
-  return Uint8Array.from([0xaa, 0x20, ...hash, 0x87]);
+  return encodeLockingBytecodeP2sh32(hash);
 }
 
 export function isP2pkhScript(script: Uint8Array): boolean {
-  return (
-    script.length === 25 &&
-    script[0] === 0x76 &&
-    script[1] === 0xa9 &&
-    script[2] === 0x14 &&
-    script[23] === 0x88 &&
-    script[24] === 0xac
-  );
+  return isPayToPublicKeyHash(script);
 }
 
 export function isP2sh20Script(script: Uint8Array): boolean {
-  return script.length === 23 && script[0] === 0xa9 && script[1] === 0x14 && script[22] === 0x87;
+  return isPayToScriptHash20(script);
 }
 
 export function isP2sh32Script(script: Uint8Array): boolean {
-  return script.length === 35 && script[0] === 0xaa && script[1] === 0x20 && script[34] === 0x87;
+  return isPayToScriptHash32(script);
 }
 
 export function isSupportedMerchantScript(script: Uint8Array): boolean {
@@ -275,6 +272,14 @@ function toLibauthTransaction(transaction: BchTransaction) {
       ...(output.token === undefined ? {} : { token: toLibauthToken(output.token) }),
     })),
     locktime: transaction.lockTime,
+  };
+}
+
+function toLibauthSourceOutput(source: BchSourceOutput) {
+  return {
+    valueSatoshis: source.value,
+    lockingBytecode: source.scriptPubKey,
+    ...(source.token === undefined ? {} : { token: toLibauthToken(source.token) }),
   };
 }
 
@@ -379,17 +384,14 @@ export function signingHash(
   transaction: BchTransaction,
   inputIndex: number,
   source: BchSourceOutput,
+  sourceOutputs: BchSourceOutput[] = [source],
 ): Uint8Array {
   if (inputIndex < 0 || inputIndex >= transaction.inputs.length)
     throw new Error('invalid input index');
   const serialization = generateSigningSerializationBCH(
     {
       inputIndex,
-      sourceOutputs: transaction.inputs.map(() => ({
-        valueSatoshis: source.value,
-        lockingBytecode: source.scriptPubKey,
-        ...(source.token === undefined ? {} : { token: toLibauthToken(source.token) }),
-      })),
+      sourceOutputs: sourceOutputs.map(toLibauthSourceOutput),
       transaction: toLibauthTransaction(transaction),
     },
     {
@@ -404,15 +406,25 @@ export function verifyP2pkhInput(
   transaction: BchTransaction,
   inputIndex: number,
   source: BchSourceOutput,
+  sourceOutputs: BchSourceOutput[] = [source],
 ): Uint8Array {
   if (!isP2pkhScript(source.scriptPubKey)) throw new Error('source output is not P2PKH');
-  const pushes = parsePushes(transaction.inputs[inputIndex]?.scriptSig ?? new Uint8Array());
+  const decoded = decodeAuthenticationInstructions(
+    transaction.inputs[inputIndex]?.scriptSig ?? new Uint8Array(),
+  );
+  if (authenticationInstructionsAreMalformed(decoded)) {
+    throw new Error('invalid P2PKH scriptSig');
+  }
+  if (!authenticationInstructionsArePushInstructions(decoded)) {
+    throw new Error('P2PKH scriptSig contains a non-push operation');
+  }
+  const pushes = decoded.map((instruction) => instruction.data);
   if (pushes.length !== 2 || pushes[0].length < 2) throw new Error('invalid P2PKH scriptSig');
   const signature = pushes[0];
   if (signature[signature.length - 1] !== SIGHASH_ALL_FORKID) {
     throw new Error('unsupported BCH sighash type');
   }
-  assertStrictDer(signature.slice(0, -1));
+  decodeBitcoinSignature(signature.slice(0, -1));
   const publicKey = pushes[1];
   const publicKeyHash = hash160(publicKey);
   if (!equalBytes(publicKeyHash, source.scriptPubKey.slice(3, 23))) {
@@ -422,7 +434,7 @@ export function verifyP2pkhInput(
     !secp256k1.verifySignatureDER(
       signature.slice(0, -1),
       publicKey,
-      signingHash(transaction, inputIndex, source),
+      signingHash(transaction, inputIndex, source, sourceOutputs),
     )
   ) {
     throw new Error('invalid BCH signature');
@@ -452,6 +464,11 @@ export function verifyPayment(
   if (transaction.lockTime !== 0) throw new Error('non-zero locktime is unsupported');
   if (target.merchantValue < policy.dustThreshold) throw new Error('merchant output is dust');
   if (sources.length !== transaction.inputs.length) throw new Error('source output count mismatch');
+  const tokenValidation = verifyTransactionTokens(
+    toLibauthTransaction(transaction),
+    sources.map(toLibauthSourceOutput),
+  );
+  if (tokenValidation !== true) throw new Error(tokenValidation);
   if (transaction.outputs.length < 1 || transaction.outputs.length > 2) {
     throw new Error('BCH exact requires one merchant output and optional change');
   }
@@ -460,7 +477,7 @@ export function verifyPayment(
   let payerHash: Uint8Array | undefined;
   for (let index = 0; index < sources.length; index += 1) {
     inputValue = addU64(inputValue, sources[index].value, 'BCH input value');
-    const inputPayerHash = verifyP2pkhInput(transaction, index, sources[index]);
+    const inputPayerHash = verifyP2pkhInput(transaction, index, sources[index], sources);
     if (payerHash !== undefined && !equalBytes(payerHash, inputPayerHash)) {
       throw new Error('all BCH inputs must belong to the same payer');
     }
@@ -601,63 +618,9 @@ function addU64(left: bigint, right: bigint, label: string): bigint {
 }
 
 export function pushData(value: Uint8Array): Uint8Array {
-  if (value.length > 75) throw new Error('script push too large for P2PKH');
-  return Uint8Array.from([value.length, ...value]);
+  return encodeDataPush(value);
 }
 
 export function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function parsePushes(script: Uint8Array): Uint8Array[] {
-  const pushes: Uint8Array[] = [];
-  let offset = 0;
-  while (offset < script.length) {
-    const opcode = script[offset++];
-    let length: number;
-    if (opcode >= 1 && opcode <= 75) length = opcode;
-    else if (opcode === 0x4c) length = script[offset++];
-    else if (opcode === 0x4d) {
-      length = script[offset] | (script[offset + 1] << 8);
-      offset += 2;
-    } else throw new Error('non-push opcode in P2PKH scriptSig');
-    const end = offset + length;
-    if (end > script.length) throw new Error('truncated script push');
-    pushes.push(script.slice(offset, end));
-    offset = end;
-  }
-  return pushes;
-}
-
-function assertStrictDer(signature: Uint8Array): void {
-  if (signature.length < 8 || signature[0] !== 0x30 || signature[1] !== signature.length - 2) {
-    throw new Error('invalid DER signature');
-  }
-  const rLength = signature[3];
-  const rStart = 4;
-  const sMarker = rStart + rLength;
-  if (
-    signature[2] !== 0x02 ||
-    rLength === 0 ||
-    sMarker + 2 > signature.length ||
-    signature[sMarker] !== 0x02
-  ) {
-    throw new Error('invalid DER signature');
-  }
-  const sLength = signature[sMarker + 1];
-  const sStart = sMarker + 2;
-  if (sLength === 0 || sStart + sLength !== signature.length)
-    throw new Error('invalid DER signature');
-  if (
-    signature[rStart] & 0x80 ||
-    (rLength > 1 && signature[rStart] === 0 && !(signature[rStart + 1] & 0x80))
-  ) {
-    throw new Error('invalid DER signature');
-  }
-  if (
-    signature[sStart] & 0x80 ||
-    (sLength > 1 && signature[sStart] === 0 && !(signature[sStart + 1] & 0x80))
-  ) {
-    throw new Error('invalid DER signature');
-  }
 }
