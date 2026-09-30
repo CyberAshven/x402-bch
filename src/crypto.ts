@@ -22,7 +22,7 @@ import {
   isPayToPublicKeyHash,
   isPayToScriptHash20,
   isPayToScriptHash32,
-  secp256k1,
+  createVirtualMachineBCH,
   verifyTransactionTokens,
 } from '@bitauth/libauth';
 import type { BchNetwork, BchOutPoint, BchSourceOutput, BchTokenCapability } from './types';
@@ -409,6 +409,11 @@ export function verifyP2pkhInput(
   sourceOutputs: BchSourceOutput[] = [source],
 ): Uint8Array {
   if (!isP2pkhScript(source.scriptPubKey)) throw new Error('source output is not P2PKH');
+  const vmResult = createVirtualMachineBCH().verify({
+    transaction: toLibauthTransaction(transaction),
+    sourceOutputs: sourceOutputs.map(toLibauthSourceOutput),
+  });
+  if (vmResult !== true) throw new Error(vmResult);
   const decoded = decodeAuthenticationInstructions(
     transaction.inputs[inputIndex]?.scriptSig ?? new Uint8Array(),
   );
@@ -429,15 +434,6 @@ export function verifyP2pkhInput(
   const publicKeyHash = hash160(publicKey);
   if (!equalBytes(publicKeyHash, source.scriptPubKey.slice(3, 23))) {
     throw new Error('P2PKH public key does not match source output');
-  }
-  if (
-    !secp256k1.verifySignatureDER(
-      signature.slice(0, -1),
-      publicKey,
-      signingHash(transaction, inputIndex, source, sourceOutputs),
-    )
-  ) {
-    throw new Error('invalid BCH signature');
   }
   return publicKeyHash;
 }
