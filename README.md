@@ -172,3 +172,28 @@ implement account-style `upto` debits. PSBT, hardware-wallet transport,
 WalletConnect, address discovery, UTXO reservation, and recovery from wallet
 storage remain wallet/application responsibilities; the finalized raw
 transaction is the x402 settlement object.
+
+## Examples
+
+The `examples/` directory keeps each integration concern in a separate file and
+uses `common.ts` for shared network, wallet, and provider helpers:
+
+| Example                                        | Covers                                                   |
+| ---------------------------------------------- | -------------------------------------------------------- |
+| `client.ts`                                    | Wallet-agnostic x402 client integration                  |
+| `native-signer-client.ts`                      | Low-level signer-backed client and HD mnemonic boundary  |
+| `cashtoken-client.ts`                          | Fungible and NFT CashToken requests                      |
+| `cashscript-p2sh32.ts`                         | CashScript/P2SH32 payment destinations                   |
+| `walletconnect-adapter.ts`                     | WalletConnect-style fully signed transaction adapter     |
+| `networks-and-hd-wallet.ts`                    | Mainnet/Chipnet and BIP44 receive/change derivation      |
+| `provider-failover.ts`                         | Multiple Fulcrum transport endpoints                     |
+| `server.ts` and `server-pricing.ts`            | Resource server registration and BCH/token pricing       |
+| `facilitator.ts` and `facilitator-policies.ts` | Confirmation, mempool, and double-spend-aware settlement |
+| `utxo-wallet-lifecycle.ts`                     | Reservation, broadcast, and failure recovery             |
+| `http-payment-flow.ts`                         | Framework-neutral 402 retry boundary                     |
+
+Typecheck them with:
+
+```bash
+npm run typecheck:examples
+```
