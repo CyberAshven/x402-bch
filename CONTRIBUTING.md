@@ -1,17 +1,10 @@
 # Contributing to `@optnlabs/x402-bch`
 
-Thank you for contributing. This repository provides the standalone TypeScript
-Bitcoin Cash implementation for x402 exact payments.
-
 ## Before you start
 
 Please open an issue for substantial protocol, API, or architectural changes.
 Small fixes, tests, documentation improvements, and example updates can usually
 be submitted directly as a pull request.
-
-Do not include mnemonics, private keys, wallet exports, provider credentials,
-or other secrets in issues, examples, fixtures, commits, or logs. Use Chipnet
-for live integration testing and synthetic fixtures for deterministic tests.
 
 ## Development setup
 
