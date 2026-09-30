@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "format:check": "prettier -c .prettierrc --check \"**/*.{ts,js,cjs,json,md}\"",
     "lint:check": "eslint src test --ext .ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:examples": "tsc --noEmit --target ES2020 --module ESNext --moduleResolution Bundler --strict --skipLibCheck examples/*.ts"
   },
   "keywords": [
     "x402",
