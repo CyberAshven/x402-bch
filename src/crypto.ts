@@ -19,9 +19,12 @@ import {
   base64ToBin,
   binToHex,
   hexToBin,
+  hashTransaction,
   isPayToPublicKeyHash,
   isPayToScriptHash20,
   isPayToScriptHash32,
+  binsAreEqual,
+  isHex,
   createVirtualMachineBCH,
   verifyTransactionTokens,
 } from '@bitauth/libauth';
@@ -220,7 +223,7 @@ export function isSupportedMerchantScript(script: Uint8Array): boolean {
 }
 
 export function isCashTokenCategory(value: string): boolean {
-  return /^[0-9a-f]{64}$/.test(value);
+  return value.length === 64 && isHex(value);
 }
 
 export function decodeCashAddrScript(
@@ -377,7 +380,7 @@ export function serializeTransaction(transaction: BchTransaction): Uint8Array {
 }
 
 export function transactionId(transaction: BchTransaction): string {
-  return bytesToHex(libauthHash256(serializeTransaction(transaction)).slice().reverse());
+  return hashTransaction(serializeTransaction(transaction));
 }
 
 export function signingHash(
@@ -618,5 +621,5 @@ export function pushData(value: Uint8Array): Uint8Array {
 }
 
 export function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+  return binsAreEqual(left, right);
 }
