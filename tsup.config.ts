@@ -12,7 +12,4 @@ const baseConfig = {
   target: 'es2020',
 };
 
-export default defineConfig([
-  { ...baseConfig, format: 'esm', outDir: 'dist/esm', clean: true },
-  { ...baseConfig, format: 'cjs', outDir: 'dist/cjs', clean: false, dts: false },
-]);
+export default defineConfig({ ...baseConfig, format: 'esm', outDir: 'dist/esm', clean: true });

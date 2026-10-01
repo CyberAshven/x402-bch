@@ -2,13 +2,16 @@
   "name": "@optnlabs/x402-bch",
   "version": "0.1.0",
   "type": "module",
-  "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
-  "types": "./dist/cjs/index.d.ts",
+  "types": "./dist/esm/index.d.ts",
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
+    "test:chipnet": "node scripts/chipnet-smoke.mjs",
     "test:watch": "vitest",
+    "check": "npm test && npm run typecheck && npm run typecheck:examples && npm run lint:check && npm run format:check && npm run build",
+    "release:check": "npm run check && node scripts/verify-package.mjs",
+    "prepublishOnly": "npm run release:check",
     "format:check": "prettier -c .prettierrc --check \"**/*.{ts,js,cjs,json,md}\"",
     "lint:check": "eslint src test --ext .ts",
     "typecheck": "tsc --noEmit",
@@ -22,7 +25,10 @@
     "bch"
   ],
   "license": "Apache-2.0",
-  "repository": "https://github.com/OPTNLabs/x402-bch",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OPTNLabs/x402-bch.git"
+  },
   "description": "Standalone TypeScript Bitcoin Cash exact payment mechanism for x402",
   "dependencies": {
     "@bitauth/libauth": "^3.0.0",
@@ -34,6 +40,7 @@
     "@types/node": "^22.13.4",
     "@typescript-eslint/eslint-plugin": "^8.29.1",
     "@typescript-eslint/parser": "^8.29.1",
+    "dotenv": "^18.0.5",
     "eslint": "^9.24.0",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-jsdoc": "^50.6.9",
@@ -47,47 +54,23 @@
   },
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/esm/index.d.mts",
-        "default": "./dist/esm/index.mjs"
-      },
-      "require": {
-        "types": "./dist/cjs/index.d.ts",
-        "default": "./dist/cjs/index.js"
-      }
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js"
     },
     "./exact/client": {
-      "import": {
-        "types": "./dist/esm/exact/client/index.d.mts",
-        "default": "./dist/esm/exact/client/index.mjs"
-      },
-      "require": {
-        "types": "./dist/cjs/exact/client/index.d.ts",
-        "default": "./dist/cjs/exact/client/index.js"
-      }
+      "types": "./dist/esm/exact/client/index.d.ts",
+      "import": "./dist/esm/exact/client/index.js"
     },
     "./exact/server": {
-      "import": {
-        "types": "./dist/esm/exact/server/index.d.mts",
-        "default": "./dist/esm/exact/server/index.mjs"
-      },
-      "require": {
-        "types": "./dist/cjs/exact/server/index.d.ts",
-        "default": "./dist/cjs/exact/server/index.js"
-      }
+      "types": "./dist/esm/exact/server/index.d.ts",
+      "import": "./dist/esm/exact/server/index.js"
     },
     "./exact/facilitator": {
-      "import": {
-        "types": "./dist/esm/exact/facilitator/index.d.mts",
-        "default": "./dist/esm/exact/facilitator/index.mjs"
-      },
-      "require": {
-        "types": "./dist/cjs/exact/facilitator/index.d.ts",
-        "default": "./dist/cjs/exact/facilitator/index.js"
-      }
+      "types": "./dist/esm/exact/facilitator/index.d.ts",
+      "import": "./dist/esm/exact/facilitator/index.js"
     }
   },
   "files": [
-    "dist"
+    "dist/esm"
   ]
 }

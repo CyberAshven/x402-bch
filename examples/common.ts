@@ -1,7 +1,9 @@
 import type { BchProvider, BchWallet, ExactBchRequirements } from '../src/index.js';
 
 export const BCH_NETWORK = 'bch:bchtest' as const;
-export const MERCHANT_ADDRESS = 'bchtest:qz...' as const;
+// Deterministic valid Chipnet P2PKH address for examples; use your merchant's
+// own address in an application.
+export const MERCHANT_ADDRESS = 'bchtest:qqg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zye3kwllue' as const;
 
 /** Shared route pricing used by the client and server examples. */
 export const nativeBchRequirements: ExactBchRequirements = {

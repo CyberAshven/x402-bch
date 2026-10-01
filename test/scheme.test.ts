@@ -82,6 +82,24 @@ describe('BCH x402 v2 exact scheme', () => {
     await expect(
       server.parsePrice({ amount: '1000', asset: 'USD' } as never, NETWORK),
     ).rejects.toThrow('BCH asset must be BCH or a 32-byte CashToken category');
+
+    await expect(
+      server.parsePrice(
+        {
+          amount: '0',
+          asset: '11'.repeat(32),
+          extra: {
+            value: '1000',
+            token: { nft: { capability: 'none', commitment: '' } },
+          },
+        },
+        NETWORK,
+      ),
+    ).resolves.toMatchObject({
+      amount: '0',
+      asset: '11'.repeat(32),
+      extra: { assetTransferMethod: 'cashtoken', value: '1000' },
+    });
   });
 
   it('uses a stable settlement binding across retries', async () => {

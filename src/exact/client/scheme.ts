@@ -4,7 +4,7 @@ import {
   BCH_ASSET,
   bytesToBase64,
   createBchPaymentTarget,
-  decodeCashAddrScript,
+  decodeBchAddressScript,
   hash160,
   isSupportedMerchantScript,
   p2pkhScript,
@@ -19,6 +19,7 @@ import {
   type BchTxInput,
   type BchTxOutput,
 } from '../../crypto';
+import { MAX_U64 } from '../../constants';
 import {
   toBchTransactionRequest,
   type BchProvider,
@@ -28,6 +29,12 @@ import {
   type BchWallet,
 } from '../../types';
 
+/**
+ * x402 exact client scheme for BCH.
+ *
+ * A low-level signer lets this class select P2PKH UTXOs and build a payment;
+ * a BchWallet lets the wallet own selection, change, signing, and custody.
+ */
 export class ExactBchScheme implements SchemeNetworkClient {
   readonly scheme = 'exact';
 
@@ -37,6 +44,14 @@ export class ExactBchScheme implements SchemeNetworkClient {
     private readonly policy: BchPolicy = DEFAULT_BCH_POLICY,
   ) {}
 
+  /**
+   * Create a base64-encoded, fully signed BCH transaction for x402 core.
+   *
+   * @param x402Version Protocol version requested by the resource server; only version 2 is supported.
+   * @param paymentRequirements BCH exact-payment requirements, including merchant output and asset.
+   * @returns The x402 version and transaction payload.
+   * @throws If requirements are invalid, funds or tokens are insufficient, or signing fails.
+   */
   async createPaymentPayload(
     x402Version: number,
     paymentRequirements: PaymentRequirements,
@@ -49,11 +64,11 @@ export class ExactBchScheme implements SchemeNetworkClient {
     }
     const target = createBchPaymentTarget(
       request.token?.category ?? BCH_ASSET,
-      (request.token?.amount ?? request.amount).toString(),
+      (request.token?.amount ?? request.value).toString(),
       requirements.extra,
       this.policy,
     );
-    const merchant = decodeCashAddrScript(request.recipient.address, requirements.network);
+    const merchant = decodeBchAddressScript(request.recipient.address, requirements.network);
     if (target.kind === 'cashtoken' && !merchant.tokenSupport) {
       throw new Error('CashToken payments require a token-support merchant CashAddr');
     }
@@ -149,7 +164,7 @@ export class ExactBchScheme implements SchemeNetworkClient {
   ): Promise<Pick<PaymentPayload, 'x402Version' | 'payload'>> {
     const raw = await (this.signerOrWallet as BchWallet).createPayment(request);
     const transaction = parseTransaction(raw);
-    const merchant = decodeCashAddrScript(request.recipient.address, requirements.network);
+    const merchant = decodeBchAddressScript(request.recipient.address, requirements.network);
     const target = createBchPaymentTarget(
       requirements.asset,
       requirements.amount,
@@ -171,10 +186,22 @@ export class ExactBchScheme implements SchemeNetworkClient {
   }
 }
 
+/** Narrow the client signer boundary to an application-owned wallet adapter. */
 function isBchWallet(value: BchSigner | BchWallet): value is BchWallet {
   return 'createPayment' in value;
 }
 
+/**
+ * Build, sign, and fee-converge a BCH exact payment transaction.
+ *
+ * @param selected Payer UTXOs selected by the wallet or application.
+ * @param merchantScript Merchant locking bytecode.
+ * @param merchantAmountOrTarget Native BCH amount or validated CashToken target.
+ * @param signer Signer authorized for the selected P2PKH inputs.
+ * @param policy Fee, dust, and transaction resource limits.
+ * @returns A fully signed BCH transaction.
+ * @throws If inputs, merchant output, token balances, or fee/change constraints are invalid.
+ */
 export async function buildAndSignTransaction(
   selected: Array<BchUtxo>,
   merchantScript: Uint8Array,
@@ -192,7 +219,9 @@ export async function buildAndSignTransaction(
   if (!isSupportedMerchantScript(merchantScript)) {
     throw new Error('BCH exact requires P2PKH, P2SH20, or P2SH32 merchant output');
   }
-  if (target.merchantValue < policy.dustThreshold) throw new Error('merchant output is dust');
+  const merchantDustThreshold =
+    target.kind === 'cashtoken' ? policy.cashTokenDustThreshold : policy.dustThreshold;
+  if (target.merchantValue < merchantDustThreshold) throw new Error('merchant output is dust');
   const inputValue = selected.reduce(
     (total, utxo) => addU64(total, utxo.value, 'BCH input value'),
     0n,
@@ -210,8 +239,10 @@ export async function buildAndSignTransaction(
   let change = inputValue - target.merchantValue;
   for (let attempt = 0; attempt < 32; attempt += 1) {
     const tokenChange = target.kind === 'cashtoken' ? inputTokenAmount - target.amount : 0n;
-    const includeChange = change >= policy.dustThreshold || tokenChange > 0n;
-    if (includeChange && change < policy.dustThreshold) {
+    const changeDustThreshold =
+      tokenChange > 0n ? policy.cashTokenDustThreshold : policy.dustThreshold;
+    const includeChange = change >= changeDustThreshold || tokenChange > 0n;
+    if (includeChange && change < changeDustThreshold) {
       throw new Error('CashToken change requires a dust-valued BCH change output');
     }
     const transaction = makeUnsignedTransaction(
@@ -240,7 +271,7 @@ export async function buildAndSignTransaction(
     }
 
     const desiredChange = available - requiredFee;
-    if (desiredChange < policy.dustThreshold) {
+    if (desiredChange < changeDustThreshold) {
       if (tokenChange > 0n) throw new Error('selected BCH UTXOs do not cover token change dust');
       change = 0n;
       continue;
@@ -257,6 +288,7 @@ export async function buildAndSignTransaction(
   throw new Error('BCH fee/change calculation did not converge');
 }
 
+/** Sign each input with BCH ForkID signing serialization. */
 async function signTransaction(
   transaction: BchTransaction,
   selected: Array<BchUtxo>,
@@ -286,6 +318,7 @@ async function signTransaction(
   }
 }
 
+/** Create the deterministic merchant/change transaction skeleton. */
 function makeUnsignedTransaction(
   selected: Array<BchUtxo>,
   merchantScript: Uint8Array,
@@ -316,6 +349,7 @@ function makeUnsignedTransaction(
   return { version: 2, inputs, outputs, lockTime: 0 };
 }
 
+/** Validate x402 BCH requirements before wallet or signer work begins. */
 function validateRequirements(
   value: PaymentRequirements,
   network: ExactBchRequirements['network'],
@@ -335,7 +369,7 @@ function compareValueDescending(left: BchUtxo, right: BchUtxo): number {
 
 function addU64(left: bigint, right: bigint, label: string): bigint {
   const result = left + right;
-  if (right < 0n || result > 0xffffffffffffffffn) throw new Error(`${label} exceeds u64`);
+  if (right < 0n || result > MAX_U64) throw new Error(`${label} exceeds u64`);
   return result;
 }
 

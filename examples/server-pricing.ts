@@ -7,7 +7,7 @@ export const nativePrice = { amount: '1000', asset: 'BCH' } as const;
 export const fungibleTokenPrice = {
   amount: '25',
   asset: TOKEN_CATEGORY,
-  extra: { tokenOutputValue: '1000' },
+  extra: { value: '1000' },
 } as const;
 
 export function createServerScheme() {
