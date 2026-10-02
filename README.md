@@ -95,6 +95,18 @@ import { ExactBchScheme } from '@optnlabs/x402-bch/exact/client';
 client.register('bch:*', new ExactBchScheme(signer, provider));
 ```
 
+`x402Client` spend controls allow only default USD stablecoin assets unless
+the application opts in, so allow BCH with a per-payment cap in satoshis:
+
+```ts
+client.setSpendControls({
+  allowedAssets: [{ network: 'bch:bitcoincash', asset: 'BCH', maxAmountPerPayment: '10000' }],
+});
+```
+
+A CashToken entry uses the token category as `asset`, and its cap applies to
+the token amount.
+
 For a low-level integration, `BchSigner` signs BCH sighash digests and
 `BchProvider` supplies UTXOs and authoritative source outputs. For a normal
 wallet integration, implement `BchWallet.createPayment(request)` and let the
@@ -187,6 +199,12 @@ facilitator.register(
 Mempool/0-conf mode is opt-in. The `noDoubleSpendProof` strategy accepts an
 unconfirmed transaction only while the provider reports no BCH double-spend
 proof; a proof is conflict evidence, not confirmation.
+
+The upfront flow settles before the resource handler runs, so a server answers
+within the request only with `mempool` or `noDoubleSpendProof`. With a
+confirmation count, settlement returns `settlement_pending:<txid>` until the
+transaction confirms, and retrying the same payment does not broadcast it
+again.
 
 ## Server
 
