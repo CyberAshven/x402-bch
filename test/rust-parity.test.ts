@@ -14,6 +14,7 @@ import { FulcrumProvider } from '../src/provider';
 import { createSecp256k1BchSignerFromMnemonic } from '../src/signer';
 import type { ExactBchRequirements } from '../src/types';
 import vectors from './fixtures/bch-exact-offline-vectors.json';
+import walletShapes from './fixtures/bch-exact-wallet-shape-vectors.json';
 
 /**
  * `bch-exact-offline-vectors.json` is written by the Rust `x402-chain-bch` test
@@ -23,7 +24,7 @@ import vectors from './fixtures/bch-exact-offline-vectors.json';
  */
 type OfflineCase = {
   id: string;
-  mode: 'mnemonic' | 'wallet';
+  mode: 'mnemonic' | 'wallet' | 'external';
   expect: 'ok' | 'reject';
   requirements: ExactBchRequirements;
   listunspent: unknown[];
@@ -44,6 +45,16 @@ function providerFor(item: OfflineCase): FulcrumProvider {
       throw new Error(`unexpected Fulcrum method ${method}`);
     },
   });
+}
+
+async function verifyRustTransaction(item: OfflineCase) {
+  const facilitator = new ExactBchFacilitatorScheme(providerFor(item));
+  const payload = {
+    x402Version: 2,
+    payload: { transaction: bytesToBase64(hexToBytes(item.transactionHex as string)) },
+    accepted: item.requirements,
+  };
+  return facilitator.verify(payload, item.requirements);
 }
 
 function payer() {
@@ -85,15 +96,7 @@ describe('offline vectors from the Rust x402-chain-bch crate', () => {
   });
 
   it.each(accepted)('$id: verifies the Rust-built transaction', async (item) => {
-    const facilitator = new ExactBchFacilitatorScheme(providerFor(item));
-    const payload = {
-      x402Version: 2,
-      payload: { transaction: bytesToBase64(hexToBytes(item.transactionHex as string)) },
-      accepted: item.requirements,
-    };
-    await expect(facilitator.verify(payload, item.requirements)).resolves.toMatchObject({
-      isValid: true,
-    });
+    await expect(verifyRustTransaction(item)).resolves.toMatchObject({ isValid: true });
   });
 
   it.each(signed)('$id: builds the same transaction bytes as Rust', async (item) => {
@@ -109,5 +112,27 @@ describe('offline vectors from the Rust x402-chain-bch crate', () => {
     await expect(client.createPaymentPayload(2, item.requirements)).rejects.toThrow(
       /merchant output is dust|CashToken commitment is too large/,
     );
+  });
+});
+
+/**
+ * `bch-exact-wallet-shape-vectors.json` is written by the Rust test
+ * `wallet_shapes_follow_the_typescript_rules` with `BCH_WALLET_SHAPE_VECTORS=<path>`.
+ * The transactions are shaped like a third-party wallet's: extra outputs,
+ * OP_RETURN data, a second payer, and unrelated CashTokens. Both facilitators
+ * must reach the same verdict on each one.
+ */
+describe('wallet-shaped transactions from the Rust x402-chain-bch crate', () => {
+  const shapes = walletShapes.cases as unknown as OfflineCase[];
+
+  it('covers accepted and rejected wallet shapes', () => {
+    expect(walletShapes.offline).toBe(true);
+    expect(shapes.filter((item) => item.expect === 'ok')).toHaveLength(7);
+    expect(shapes.filter((item) => item.expect === 'reject')).toHaveLength(6);
+  });
+
+  it.each(shapes)('$id: reaches the same verdict as Rust ($expect)', async (item) => {
+    const result = await verifyRustTransaction(item);
+    expect(result.isValid, result.invalidReason).toBe(item.expect === 'ok');
   });
 });
