@@ -22,17 +22,27 @@ or validate the contract's later spending conditions.
 
 ## Rust
 
-The same BCH exact rules are implemented for Rust in the `x402-chain-bch` crate.
-It is not on crates.io yet. Until that crate is merged upstream, depend on the
-open branch:
+The Rust SDK is the `x402-chain-bch` crate in [`rust/x402-chain-bch`](rust/x402-chain-bch).
+Protocol message types come from published [`x402-types` 2.0.2](https://crates.io/crates/x402-types).
+This crate is not on crates.io yet.
 
 ```toml
-x402-chain-bch = { git = "https://github.com/CyberAshven/x402-rs", branch = "feat/bch-x402-rs-integration" }
+x402-chain-bch = { git = "https://github.com/OPTNLabs/x402-bch" }
 ```
+
+Until that lands on `main`, use the stacked branch:
+
+```toml
+x402-chain-bch = { git = "https://github.com/CyberAshven/x402-bch", branch = "feat/rust-sdk" }
+```
+
+TypeScript installs the same package with `npm install @optnlabs/x402-bch`.
+CashToken merchant satoshis are `extra.value` in TypeScript and
+`extra.tokenOutputValue` in the Rust crate.
 
 - npm package: https://www.npmjs.com/package/@optnlabs/x402-bch
 - TypeScript pull request: https://github.com/OPTNLabs/x402-bch/pull/1
-- Rust pull request: https://github.com/lightswarm124/x402-rs/pull/1
+- Upstream Rust contribution: https://github.com/lightswarm124/x402-rs/pull/1
 - Upstream BCH pull request: https://github.com/x402-rs/x402-rs/pull/129
 - Closed earlier upstream request: https://github.com/x402-rs/x402-rs/pull/128
 
