@@ -37,8 +37,8 @@ x402-chain-bch = { git = "https://github.com/CyberAshven/x402-bch", branch = "fe
 ```
 
 TypeScript installs the same package with `npm install @optnlabs/x402-bch`.
-CashToken merchant satoshis are `extra.value` in TypeScript and
-`extra.tokenOutputValue` in the Rust crate.
+Both SDKs use `extra.value` for CashToken merchant satoshis. Rust still
+accepts `tokenOutputValue` when reading an older message.
 
 - npm package: https://www.npmjs.com/package/@optnlabs/x402-bch
 - TypeScript pull request: https://github.com/OPTNLabs/x402-bch/pull/1
