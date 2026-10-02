@@ -67,6 +67,7 @@ CashToken merchant satoshis are `extra.tokenOutputValue` in this crate and
 
 - npm package: https://www.npmjs.com/package/@optnlabs/x402-bch
 - TypeScript pull request: https://github.com/OPTNLabs/x402-bch/pull/1
+- Rust SDK pull request: https://github.com/OPTNLabs/x402-bch/pull/2
 - Upstream Rust contribution: https://github.com/lightswarm124/x402-rs/pull/1
 - Upstream BCH pull request: https://github.com/x402-rs/x402-rs/pull/129
 - Closed earlier upstream request: https://github.com/x402-rs/x402-rs/pull/128
