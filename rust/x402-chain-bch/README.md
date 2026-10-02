@@ -78,7 +78,8 @@ x402-chain-bch = { git = "https://github.com/CyberAshven/x402-bch", branch = "fe
 TypeScript installs the same package with `npm install @optnlabs/x402-bch`.
 Both SDKs use `extra.value` for CashToken merchant satoshis. This crate still
 accepts `tokenOutputValue` when reading an older message. The wallet request
-keeps its own `tokenOutputValue` field.
+has the same shape in both SDKs: `recipient.address`, the merchant satoshis in
+`value`, and an optional `token`.
 
 - npm package: https://www.npmjs.com/package/@optnlabs/x402-bch
 - TypeScript pull request: https://github.com/OPTNLabs/x402-bch/pull/1
