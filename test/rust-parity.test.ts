@@ -119,16 +119,16 @@ describe('offline vectors from the Rust x402-chain-bch crate', () => {
  * `bch-exact-wallet-shape-vectors.json` is written by the Rust test
  * `wallet_shapes_follow_the_typescript_rules` with `BCH_WALLET_SHAPE_VECTORS=<path>`.
  * The transactions are shaped like a third-party wallet's: extra outputs,
- * OP_RETURN data, a second payer, and unrelated CashTokens. Both facilitators
- * must reach the same verdict on each one.
+ * OP_RETURN data, a second payer, unrelated CashTokens, and P2SH inputs. Both
+ * facilitators must reach the same verdict on each one.
  */
 describe('wallet-shaped transactions from the Rust x402-chain-bch crate', () => {
   const shapes = walletShapes.cases as unknown as OfflineCase[];
 
   it('covers accepted and rejected wallet shapes', () => {
     expect(walletShapes.offline).toBe(true);
-    expect(shapes.filter((item) => item.expect === 'ok')).toHaveLength(7);
-    expect(shapes.filter((item) => item.expect === 'reject')).toHaveLength(6);
+    expect(shapes.filter((item) => item.expect === 'ok')).toHaveLength(9);
+    expect(shapes.filter((item) => item.expect === 'reject')).toHaveLength(8);
   });
 
   it.each(shapes)('$id: reaches the same verdict as Rust ($expect)', async (item) => {
